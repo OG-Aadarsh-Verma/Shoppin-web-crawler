@@ -12,10 +12,10 @@ async def fetch_page(url, session):
     """
     try:
         async with session.get(url, timeout=10) as res:
-            if res.status_code == 200:
-                return await res.text
+            if res.status == 200:
+                return await res.text()
             else:
-                logger.error(f"Failed to fetch {url}. Status code: {res.status_code}")
+                logger.error(f"Failed to fetch {url}. Status code: {res.status}")
                 return None
     except aiohttp.ClientError as e:
         logger.error(f"Error fetching {url}: {e}", exc_info=True)
@@ -29,7 +29,7 @@ async def get_robots_txt(domain, session):
     """
     robots_url = urljoin(domain, "robots.txt")
     robot_parser = RobotFileParser()
-    robot_parser.set_url()
+    robot_parser.set_url(robots_url)
     try:
         async with session.get(robots_url) as response:
             text = await response.text()
@@ -71,7 +71,7 @@ def is_category(url, domain):
     """
     parsed_domain_url = urlparse(domain)
     parsed_url = urlparse(url)
-    category_patterns = ['/category', '/cat', '/men', '/women']
+    category_patterns = ['/category', '/cat', '/men', '/women', '/collections']
     if parsed_domain_url.netloc == parsed_url.netloc:
         for pattern in category_patterns:
             if pattern in parsed_url.path:

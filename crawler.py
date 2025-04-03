@@ -19,22 +19,24 @@ async def crawl_domain(domain):
     queue = [domain]
 
     async with aiohttp.ClientSession() as session:
-        rp = get_robots_txt(domain, session)
+        rp = await get_robots_txt(domain, session)
         if rp is None:
             logger.warning(f"robots.txt not found for {domain}. Skipping the domain.")
             return []
         
         crawl_delay = rp.crawl_delay("*") or random.uniform(1, 3)
         while queue:
+            if len(product_url) >= 20:
+                break
             current_url = queue.pop(0)
             if current_url in visited:
                 continue
             visited.add(current_url)
 
-            if not rp.can_fetch(current_url):
+            if not rp.can_fetch("*",url=current_url):
                 continue
 
-            html_content = fetch_page(current_url)
+            html_content = await fetch_page(current_url, session)
             if not html_content:
                 continue
 
@@ -43,12 +45,12 @@ async def crawl_domain(domain):
                 if is_valid_product_url(link, domain):
                     if link not in visited:
                         product_url.add(link)
-                        queue.add(link)
+                        queue.append(link)
                 elif is_category(link, domain):
                     if link not in visited:
                         queue.append(link)
                 elif urlparse(domain).netloc == urlparse(link).netloc and link not in visited:
-                    queue.add(link)
+                    queue.append(link)
                 
             await(asyncio.sleep(crawl_delay))
     return product_url
@@ -82,5 +84,17 @@ async def run_crawler():
         logger.info(msg=f"Finished crawling domain: {domain}")
     
     results = await asyncio.gather(*tasks)
-
+    all_product_urls = {domains[i]: results[i] for i in range(len(domains))}
+    try:
+        with open("./product_urls.txt", "w") as file:
+            for domain, urls in all_product_urls.items():
+                file.write(f"\nProduct URLs for {domain}:\n")
+                for url in urls:
+                    file.write(url + "\n")
+    except Exception as e:
+        logger.error(msg="Unable to write the product URLs to file.", exc_info=True)
+        return
+    finally:
+        file.close()
+    logger.info(msg="Product URLs written to file successfully.")
     logger.info(msg="Web crawler terminated.")
