@@ -1,4 +1,4 @@
-from crawler import run_crawler
+from core.crawler import run_crawler
 from asyncio import run
 
 if __name__ == "__main__":

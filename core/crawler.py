@@ -3,8 +3,8 @@ import asyncio
 import aiohttp
 from urllib.parse import urlparse
 
-from logger_config import logger
-from scapper import get_robots_txt, fetch_page, get_all_links, is_valid_product_url, is_category
+from core.logger_config import logger
+from core.scapper import get_robots_txt, fetch_page, get_all_links, is_valid_product_url, is_category
 
 visited = set()
 
@@ -37,11 +37,12 @@ def save_product_url(url):
         Saves the product URL to a file.
     """
     # Turn into DB call after DB setup
+    file_path='./data/product_urls.txt'
     try:
-        with open("product_urls.txt", "r") as product_urls:
+        with open(file_path, "r") as product_urls:
             if url in product_urls:
                 return
-        with open("product_urls.txt", "a") as product_urls:
+        with open(file_path, "a") as product_urls:
             product_urls.write(url + "\n")
     except FileNotFoundError as e:
         logger.error(msg="Unable to find or open the product URLs file.", exc_info=True)
@@ -73,6 +74,7 @@ async def process_url(url, session, queue, domain, rp):
             save_product_url(link)
             await queue.put(link)
         elif is_category(link, domain):
+            # print(link)
             await queue.put(link)
         elif urlparse(domain).netloc == urlparse(link).netloc:
             await queue.put(link)
@@ -127,7 +129,7 @@ async def run_crawler():
     domains = []
     try:
         # Turn into DB call after DB setup
-        with open("./domains.txt", "r") as domains_file:
+        with open("./data/domains.txt", "r") as domains_file:
             for domain in domains_file:
                 domains.append(domain.strip())
     except FileNotFoundError as e:

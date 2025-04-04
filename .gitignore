@@ -1,4 +1,10 @@
+#Files
 temp*
 crawler_x.py
-web_crawl/
 crawler.ipynb
+
+# Folders
+__pycache__/
+.crawler_env/
+data/
+logs/

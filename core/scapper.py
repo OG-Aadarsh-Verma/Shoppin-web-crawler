@@ -5,7 +5,7 @@ from fake_useragent import UserAgent
 import aiohttp
 
 
-from logger_config import logger
+from core.logger_config import logger
 
 ua = UserAgent()
 
@@ -67,7 +67,7 @@ def is_valid_product_url(url, domain):
     """
     parsed_domain_url = urlparse(domain)
     parsed_url = urlparse(url)
-    product_patterns = ['/product', '/item', '/p/']
+    product_patterns = ['/product', '/item', '/p/', '/p-']
     if parsed_domain_url.netloc == parsed_url.netloc:
         for pattern in product_patterns:
             if pattern in parsed_url.path:
