@@ -6,95 +6,135 @@ from urllib.parse import urlparse
 from logger_config import logger
 from scapper import get_robots_txt, fetch_page, get_all_links, is_valid_product_url, is_category
 
+visited = set()
 
+def is_visited(url):
+    """
+        Checks if the URL has already been visited.
+        Returns True if visited, False otherwise.
+    """
+    # Turn into DB call after DB setup
+    # try:
+    #     with open("visited_urls.txt", "r") as visited:
+    #         if url in visited:
+    #             return True
+    #     with open("visited_urls.txt", "a") as visited:
+    #         visited.write(url + "\n")
+    #         return False
+    # except FileNotFoundError as e:
+    #     logger.error(msg="Unable to find or open the visited URLs file.", exc_info=True)
+    #     return True
+    # except Exception as e:
+    #     logger.error(msg="An unexpected error occurred while checking visited URLs.", exc_info=True)
+    #     return True
+    if url in visited:
+        return True
+    visited.add(url)
+    return False
 
+def save_product_url(url):
+    """
+        Saves the product URL to a file.
+    """
+    # Turn into DB call after DB setup
+    try:
+        with open("product_urls.txt", "r") as product_urls:
+            if url in product_urls:
+                return
+        with open("product_urls.txt", "a") as product_urls:
+            product_urls.write(url + "\n")
+    except FileNotFoundError as e:
+        logger.error(msg="Unable to find or open the product URLs file.", exc_info=True)
+    except Exception as e:
+        logger.error(msg="An unexpected error occurred while saving product URLs.", exc_info=True)
 
-async def crawl_domain(domain):
+async def process_url(url, session, queue, domain, rp):
+    """
+        Checks if th URL is compliant with the robots.txt file ans has not been visited.
+        Returns a list of urls to be added to the queue.
+    """
+    if is_visited(url):
+        return
+    
+    if not rp.can_fetch("*",url=urlparse(url).path):
+        return
+    
+    html_content = await fetch_page(url, session)
+    if not html_content:
+        logger.warning(f"Failed to fetch {url} or no content.")
+        return
+
+    all_links_on_page = get_all_links(html_content, domain)
+    for link in all_links_on_page:
+        if link in queue._queue:
+            continue
+
+        if is_valid_product_url(link, domain):
+            save_product_url(link)
+            await queue.put(link)
+        elif is_category(link, domain):
+            await queue.put(link)
+        elif urlparse(domain).netloc == urlparse(link).netloc:
+            await queue.put(link)
+
+async def worker(queue, session, domain, rp,):
+    """
+        Woker function to process URLs from the queue.
+    """
+    crawl_delay = rp.crawl_delay("*") or random.uniform(1, 3)
+    # print('worker called')
+    # while True:
+        
+    #     if url is None:
+    #         break
+    url = await queue.get()
+    await process_url(url=url, session=session, queue=queue,domain= domain, rp=rp)
+    await asyncio.sleep(crawl_delay)
+    queue.task_done()
+
+async def crawl_domain(domain, num_workers=5):
     """
         Crawls a given domain asynchronously while following 'robots.txt'.
-        Return a list of product URLs found on the domain.
+        Save a list of product URLs found on the domain.
     """
-    visited = set()
-    product_url = set()
-    queue = [domain]
+    logger.info(msg=f"Starting to crawl domain: {domain}")
+    queue = asyncio.Queue()
+    await queue.put(domain)
 
     async with aiohttp.ClientSession() as session:
         rp = await get_robots_txt(domain, session)
         if rp is None:
             logger.warning(f"robots.txt not found for {domain}. Skipping the domain.")
-            return []
+            return
         
-        crawl_delay = rp.crawl_delay("*") or random.uniform(1, 3)
-        while queue:
-            if len(product_url) >= 20:
-                break
-            current_url = queue.pop(0)
-            if current_url in visited:
-                continue
-            visited.add(current_url)
-
-            if not rp.can_fetch("*",url=current_url):
-                continue
-
-            html_content = await fetch_page(current_url, session)
-            if not html_content:
-                continue
-
-            all_links_on_page = get_all_links(html_content, domain)
-            for link in all_links_on_page:
-                if is_valid_product_url(link, domain):
-                    if link not in visited:
-                        product_url.add(link)
-                        queue.append(link)
-                elif is_category(link, domain):
-                    if link not in visited:
-                        queue.append(link)
-                elif urlparse(domain).netloc == urlparse(link).netloc and link not in visited:
-                    queue.append(link)
-                
-            await(asyncio.sleep(crawl_delay))
-    return product_url
-                    
-
-
+        while not queue.empty() :
+            workers = [
+                asyncio.create_task(worker(queue, session, domain, rp))
+                for _ in range(num_workers)
+            ]
+            await asyncio.gather(*workers)
+    
+    logger.info(msg=f"Finished crawling domain: {domain}")
+        
 
 async def run_crawler():
     """
         Function that executes the web crawler.
         Reads the domains to crawl from 'domains.txt' file.
-        Writes the crawled product URLs to 'product_urls.txt'.
     """
 
     logger.info(msg="Web crawler started.")
+    domains = []
     try:
-        domains_file = open("./domains.txt", "r")
-        domains = []
-        for domain in domains_file:
-            domains.append(domain.strip())
+        # Turn into DB call after DB setup
+        with open("./domains.txt", "r") as domains_file:
+            for domain in domains_file:
+                domains.append(domain.strip())
     except FileNotFoundError as e:
         logger.error(msg="Unable to find or open the domains to crawl.", exc_info=True)
         return
-    finally:
-        domains_file.close()
     
-    tasks = []
-    for domain in domains:
-        logger.info(msg=f"Starting to crawl domain: {domain}")
-        tasks.append(await crawl_domain(domain))
-        logger.info(msg=f"Finished crawling domain: {domain}")
-    
-    results = await asyncio.gather(*tasks)
-    all_product_urls = {domains[i]: results[i] for i in range(len(domains))}
-    try:
-        with open("./product_urls.txt", "w") as file:
-            for domain, urls in all_product_urls.items():
-                file.write(f"\nProduct URLs for {domain}:\n")
-                for url in urls:
-                    file.write(url + "\n")
-    except Exception as e:
-        logger.error(msg="Unable to write the product URLs to file.", exc_info=True)
-        return
-    finally:
-        file.close()
-    logger.info(msg="Product URLs written to file successfully.")
+    tasks = [crawl_domain(domain) for domain in domains]
+    await asyncio.gather(*tasks)  
+
     logger.info(msg="Web crawler terminated.")

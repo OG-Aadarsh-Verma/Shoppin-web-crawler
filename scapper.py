@@ -1,17 +1,27 @@
 from urllib.parse import urlparse, urljoin
 from urllib.robotparser import RobotFileParser
 from bs4 import BeautifulSoup
+from fake_useragent import UserAgent
 import aiohttp
 
+
 from logger_config import logger
+
+ua = UserAgent()
 
 async def fetch_page(url, session):
     """
         Fetches the content of a webpage.
         Returns the HTML content if successful, None otherwise.
     """
+    headers = {
+        'User-Agent': ua.random,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Referer': 'https://www.google.com/'
+    }
     try:
-        async with session.get(url, timeout=10) as res:
+        async with session.get(url,headers=headers, timeout=10) as res:
             if res.status == 200:
                 return await res.text()
             else:
@@ -71,7 +81,7 @@ def is_category(url, domain):
     """
     parsed_domain_url = urlparse(domain)
     parsed_url = urlparse(url)
-    category_patterns = ['/category', '/cat', '/men', '/women', '/collections']
+    category_patterns = ['/men', '/women', '/category', '/c/', '/collection']
     if parsed_domain_url.netloc == parsed_url.netloc:
         for pattern in category_patterns:
             if pattern in parsed_url.path:
