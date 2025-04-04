@@ -1,4 +1,5 @@
 #Files
+.env
 temp*
 crawler_x.py
 crawler.ipynb
