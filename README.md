@@ -1,6 +1,6 @@
 # Web Crawler for Shoppin Assignment
 
-> Note: The currect code will not work. This is just me pushing it on git so that I can work on it later.
+> Note: The currect code will work. But is still not complete.
 
 This is a web crawler made in Python for the following problem statement:
 
