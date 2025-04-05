@@ -1,22 +1,24 @@
 import random
 import asyncio
 import aiohttp
+import os
 from urllib.parse import urlparse
+from dotenv import load_dotenv
 
 from ..logs.logger_config import logger
 from .scrapper import Scrapper 
 
 from ..database.db import Database
 
+load_dotenv()
+
 class Crawler:
-    VISITED_LIMIT = 100
-    PRODUCT_LIMIT = 1000
+    VISITED_LIMIT = os.getenv('VISITED_LIMIT', 100)
+    PRODUCT_LIMIT = os.getenv('PRODUCT_LIMIT', 1000)
 
     def __init__(self):
         self.db = Database()
-        self.visited_collection = self.db.get_collection('visited_urls')
-        self.product_collection = self.db.get_collection('product_urls')
-        self.domain_collection = self.db.get_collection('domains')
+        self.domain_collection = self.db.get_domain_collection()
         self.scrapper = Scrapper()
         self.running_tasks = []
         self.visited_set = set()
@@ -24,48 +26,76 @@ class Crawler:
 
     def is_visited(self, url):
         """
-            Checks if the URL has already been visited.
+            Checks if the URL has been visited recently.
             Returns True if visited, False otherwise.
         """
-        if len(self.visited_set) < self.VISITED_LIMIT:
-            if url in self.visited_set:
-                return True
-            self.visited_set.add(url)
-            return False
-        if len(self.visited_set) == self.VISITED_LIMIT:
-            self.visited_collection.insert_many({'url': val} for val in self.visited_set)
-            self.visited_set.add('x')
-
-        if self.visited_collection.find_one({'url': url}):
+        if url in self.visited_set:
             return True
-        self.visited_collection.insert_one({'url': url})
+
+        if len(self.visited_set) >= self.VISITED_LIMIT:
+            self.flush_visited_urls()
+
+        self.visited_set.add(url)
         return False
+
 
     def is_saved(self, url):
         """
-            Checks if the URL is already saved in the product collection.
+            Checks if the URL is already saved in the product cache.
             Returns True if saved, False otherwise.
         """
-        if len(self.product_set) < self.PRODUCT_LIMIT:
-            if url in self.product_set:
-                return True
-            self.product_set.add(url)
-            return False
-        
-        return self.product_collection.find_one({'url': url}) is not None
-    
+        if url in self.product_set:
+            return True
+
+        return False
+
+
     def save_product_url(self, domain, url):
         """
-            Saves the product URL to a file.
+            Saves the product URLs to cache. Flushes to DB when limit is reached.
         """
-        if len(self.product_set)<self.PRODUCT_LIMIT:
-            self.product_set.add(url)
-        if len(self.product_set) == self.PRODUCT_LIMIT:
-            self.product_collection.insert_many({'url': val} for val in self.product_set)
-            self.product_set.add('x')
+        self.product_set.add((domain, url))
+        if len(self.product_set) >= self.PRODUCT_LIMIT:
+            self.flush_product_urls()
 
-        if not self.product_collection.find_one({'domain': domain, 'url': url}):
-            self.product_collection.insert_one({'domain': domain, 'url': url})
+
+    def flush_visited_urls(self):
+        """
+            Flushes the cached visited URLs to the database.
+        """
+        try:
+            self.db.insert_many_unique(
+                collection=self.db.get_visited_collection(),
+                documents=[
+                    {'url':url}
+                    for url in self.visited_set
+                ]
+            )
+            self.visited_set.clear()
+            logger.info("Visited URLs flushed to the database.")
+        except Exception as e:
+            logger.error(f"[CRAWL] Error flushing visited URLs: {e}", exc_info=True)
+            return
+        
+        
+    def flush_product_urls(self):
+        """
+            Flushes the cached product URLs to the database.
+        """
+        try: 
+            self.db.insert_many_unique(
+                collection=self.db.get_product_collection(),
+                documents=[
+                    {'domain': domain, 'url': url} 
+                    for (domain, url) in self.product_set
+                ],
+            )
+
+            self.product_set.clear()
+            logger.info("Product URLs flushed to the database.")
+        except Exception as e:
+            logger.error(f"[CRAWL] Error flushing product URLs: {e}", exc_info=True)
+            return
         
 
     async def process_url(self, url, session, queue, domain, rp):
@@ -78,7 +108,7 @@ class Crawler:
         
         html_content = await self.scrapper.fetch_page(url, session)
         if not html_content:
-            logger.warning(f"Failed to fetch {url} or no content.")
+            logger.warning(f"[CRAWL] Failed to fetch {url} or no content.")
             return
 
         all_links_on_page = self.scrapper.get_all_links(html_content, domain)
@@ -102,9 +132,7 @@ class Crawler:
         """
         vis_len = len(self.visited_set)
         prod_len = len(self.product_set)
-        visited_count = self.visited_collection.count_documents({}) if vis_len == 0 else vis_len  
-        product_count = self.product_collection.count_documents({}) if prod_len == 0 else prod_len
-        logger.info(f"Visited URLs: {visited_count}, Product URLs: {product_count}")
+        logger.info(f"[CACHE] Visited URLs: {vis_len}, Product URLs: {prod_len}")
 
 
     async def worker(self, queue, session, domain, rp):
@@ -113,11 +141,18 @@ class Crawler:
         """
         crawl_delay = rp.crawl_delay("*") or 0.5
         while True:
-            try:
-                url = await asyncio.wait_for(queue.get(), timeout=15)
-            except asyncio.TimeoutError:    
-                logger.warning(f"A worker timed out while waiting.")
+            if self.shutdown_signal(): # To terminate the worker
+                logger.info("[CRAWL] Shutdown signal received. Stopping worker.")
+                while not queue.empty():
+                    queue.task_done()
                 break
+            
+            try:
+                url = await asyncio.wait_for(queue.get(), timeout=1)
+            except asyncio.TimeoutError:    
+                logger.warning(f"[CRAWL] A worker timed out while waiting.")
+                break
+
             if url is None: # To send a signal to stop the worker
                 queue.task_done()
                 break
@@ -126,7 +161,7 @@ class Crawler:
                 try:
                     await self.process_url(url=url, session=session, queue=queue,domain= domain, rp=rp)
                 except Exception as e:
-                    logger.error(f"Error processing URL {url}: {e}", exc_info=True)
+                    logger.error(f"[CRAWL] Error processing URL {url}: {e}", exc_info=True)
             
             queue.task_done()        
             await asyncio.sleep(crawl_delay)
@@ -137,14 +172,14 @@ class Crawler:
             Crawls a given domain asynchronously while following 'robots.txt'.
             Save a list of product URLs found on the domain.
         """
-        logger.info(msg=f"Starting to crawl domain: {domain}")
+        logger.info(msg=f"[CRAWL] Starting to crawl domain: {domain}")
         queue = asyncio.Queue()
         await queue.put(domain)
 
         async with aiohttp.ClientSession() as session:
             rp = await self.scrapper.get_robots_txt(domain, session)
             if rp is None:
-                logger.warning(f"robots.txt not found for {domain}. Skipping the domain.")
+                logger.warning(f"[CRAWL] robots.txt not found for {domain}. Skipping {domain}.")
                 return
             while not queue.empty():
                 workers = [
@@ -152,12 +187,18 @@ class Crawler:
                     for _ in range(num_workers)
                 ]
                 
-                await queue.join()
-                for _ in range(num_workers):
-                    await queue.put(None)
+                try:
+                    # Wait for the queue to be processed
+                    await queue.join()
+                except asyncio.CancelledError:
+                    logger.info("[CRAWL] Shutdown signal received. Cleaning up workers and queue.")
+                finally:
+                    # Send exit signals to workers
+                    for _ in range(num_workers):
+                        await queue.put(None)
                 await asyncio.gather(*workers)
         
-        logger.info(msg=f"Finished crawling domain: {domain}")
+        logger.info(msg=f"[CRAWL] Finished crawling domain: {domain}")
         
 
     async def run_crawler(self):
@@ -170,24 +211,38 @@ class Crawler:
             domains.append(domain['url'])
         
         if not domains:
-            logger.error("No domains were found in the database.")
+            logger.error("[DB] No domains were found in the database.")
             return
-        logger.info(msg="Web crawler started.")  
+        logger.info(msg="[CRAWL] Web crawler started.")  
         self.running_tasks = [self.crawl_domain(domain) for domain in domains]
         await asyncio.gather(*self.running_tasks)  
-        self.db.close()
-        logger.info(msg="Web crawler terminated.")
+        self.shutdown()
+        logger.info(msg="[CRAWL] Web crawler terminated.")
 
     def shutdown(self):
         """
             Shuts down the crawler.
         """
-        logger.info("Shutting down the crawler...")
+        logger.info("[CRAWL] Shutting down the crawler...")
         for task in self.running_tasks:
             if not task.done():
-                task.cancel()
+                try:
+                    logger.info(f"[CRAWL] Cancelling task: {task}")
+                    task.cancel()
+                except asyncio.CancelledError:
+                    pass
         
+        try:
+            os.remove("shutdown.signal")
+        except Exception:
+            pass
         self.db.close()
-        logger.info("Crawler shutdown complete.")
+        logger.info("[CRAWL] Crawler shutdown complete.")
 
-
+    def shutdown_signal(self):
+        """
+            Checks if a shutdown.signal (file) has been received.
+        """
+        if os.path.exists("shutdown.signal"):
+            return True
+        return False

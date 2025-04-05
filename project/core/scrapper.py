@@ -28,16 +28,16 @@ class Scrapper:
                 if res.status == 200:
                     return await res.text()
                 else:
-                    logger.error(f"Failed to fetch {url}. Status code: {res.status}")
+                    logger.error(f"[SCRAP] Failed to fetch {url}. Status code: {res.status}")
                     return None
         except aiohttp.ClientError as e:
-            logger.error(f"Error fetching {url}: {e}")
+            logger.error(f"[SCRAP] Error fetching {url}: {e}")
             return None
         except TimeoutError as e:
-            logger.error(f"Timeout while fetching {url}")
+            logger.error(f"[SCRAP] Timeout while fetching {url}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error while fetching {url}: {e}", exc_info=True)
+            logger.error(f"[SCRAP] Unexpected error while fetching {url}: {e}", exc_info=True)
             return None
 
     async def get_robots_txt(self, domain, session):
