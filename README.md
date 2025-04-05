@@ -17,14 +17,15 @@ This is a web crawler made in Python for the following problem statement:
 
 1. Clone the repository locally:
    ```bash
-   git clone https://github.com/OG-Aadarsh-Verma/Shoppin_web_crawler.git
-   cd Web_Crawler
+   git clone https://github.com/OG-Aadarsh-Verma/Shoppin-web-crawler.git
+   cd Shoppin-web-crawler
    ```
 
 2. Install the dependencies:
    ```bash
    pip install -r requirements.txt
    ```
+   > Note: I suggest doing creating a new python environment before this step. 
 
 ---
 
@@ -36,7 +37,15 @@ This is a web crawler made in Python for the following problem statement:
    https://another-example.com
    ```
 
-2. Run the crawler:
+2. Setup an `.env` file in the root directory of the project along with your MongoDB connection URI and DB_NAME. For example: (Strictly follow the naming convention):
+   ```
+   MONGO_URI=<Your_Connection_URI>
+   MONGO_DB_NAME=<Your_DB_name>
+   VISITED_LIMIT=<number_of_sites_to_cache_before_flush> [Optional]
+   PRODUCT_LIMIT=<number_of_sites_to_cache_before_flush> [Optional]
+   ```
+
+3. Run the crawler:
    ```bash
    python3 __main__.py
    ```
