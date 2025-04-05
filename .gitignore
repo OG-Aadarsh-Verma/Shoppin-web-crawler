@@ -3,9 +3,9 @@
 temp*
 crawler_x.py
 crawler.ipynb
+project/logs/*.log
 
 # Folders
 __pycache__/
 .crawler_env/
 data/
-logs/

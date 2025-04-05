@@ -1,7 +1,8 @@
 import logging
 from logging.handlers import RotatingFileHandler
+
 # Configure the logger
-LOG_FILE = "./logs/crawler.log"
+LOG_FILE = "./project/logs/crawler.log"
 
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 

@@ -2,7 +2,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
 
-from core.logger_config import logger
+from ..logs.logger_config import logger
 
 load_dotenv()
 
@@ -26,3 +26,4 @@ class Database:
 
     def close(self):
         self.client.close()
+        logger.info("Closed MongoDB connection.")

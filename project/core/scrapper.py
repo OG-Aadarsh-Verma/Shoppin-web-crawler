@@ -3,9 +3,10 @@ from urllib.robotparser import RobotFileParser
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 import aiohttp
+from asyncio import TimeoutError 
 
 
-from core.logger_config import logger
+from ..logs.logger_config import logger
 
 class Scrapper:
     def __init__(self):
@@ -30,7 +31,13 @@ class Scrapper:
                     logger.error(f"Failed to fetch {url}. Status code: {res.status}")
                     return None
         except aiohttp.ClientError as e:
-            logger.error(f"Error fetching {url}: {e}", exc_info=True)
+            logger.error(f"Error fetching {url}: {e}")
+            return None
+        except TimeoutError as e:
+            logger.error(f"Timeout while fetching {url}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error while fetching {url}: {e}", exc_info=True)
             return None
 
     async def get_robots_txt(self, domain, session):
