@@ -68,6 +68,10 @@ class Scrapper:
             href = a_tag['href']
             absolute_url = urljoin(base_url, href)
             links.add(absolute_url)
+        for link_tag in soup.find_all('link', href=True):
+            href = link_tag['href']
+            absolute_url = urljoin(base_url, href)
+            links.add(absolute_url)
         return links
 
     def is_valid_product_url(self, url, domain):

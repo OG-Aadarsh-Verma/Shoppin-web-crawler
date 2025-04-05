@@ -10,14 +10,19 @@ load_dotenv()
 class Database:
     uri = os.getenv('MONGO_URI')
     db_name = os.getenv('MONGO_DB_NAME')
-
-    if not uri or not db_name:
-        logger.error("Missing MongoDB URI or database name in environment variables.")
+    
     def __init__(self):
+        if not self.uri or not self.db_name:
+            raise ValueError("Missing MongoDB URI or database name in environment variables.")
+        
         logger.info("Connecting to MongoDB...")
-        self.client = MongoClient(self.uri) 
-        logger.info("Connected to MongoDB.")
-        self.db = self.client[self.db_name]
+        try:
+            self.client = MongoClient(self.uri) 
+            logger.info("Connected to MongoDB.")
+            self.db = self.client[self.db_name]
+        except Exception as e:
+            logger.error(f"[DB] Error connecting to MongoDB: {e}")
+            raise e
 
     def get_collection(self, collection_name: str):
         try:
