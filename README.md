@@ -49,3 +49,14 @@ This is a web crawler made in Python for the following problem statement:
    ```bash
    python3 __main__.py
    ```
+
+4. Stop the crawler after some time:
+   >Note: Run this command in a new terminal.
+   ```bash
+   python3 project/core/shutdown.py
+   ```
+
+5. Write the found urls to a file:
+   ```bash
+   python3 db_to_file_mapper.py
+   ```
