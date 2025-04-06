@@ -18,12 +18,14 @@ This is a web crawler made in Python for the following problem statement:
    git clone https://github.com/OG-Aadarsh-Verma/Shoppin-web-crawler.git
    cd Shoppin-web-crawler
    ```
-
-2. Install the dependencies:
+2. Make a new python environment:
+   ```bash
+   python3 -m venv <env_name>
+   ```
+3. Install the dependencies:
    ```bash
    python3 -m pip install -r requirements.txt
-   ```
-   > Note: I suggest creating a new python environment before this step. 
+   ``` 
 
 ---
 
