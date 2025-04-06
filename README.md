@@ -1,12 +1,10 @@
 # Web Crawler for Shoppin Assignment
 
-> Note: The currect code will work. But is still not complete.
-
 This is a web crawler made in Python for the following problem statement:
 
-> **Problem Statement:** Crawler for Discovering Product URLs on E-commerce Websites
+**Problem Statement:** Crawler for Discovering Product URLs on E-commerce Websites
 
-
+> Note: Please find the complete documentation of this code inside `Documentation.md`
 ## Prerequisites
 
 - Python 3.8 or higher
@@ -25,7 +23,7 @@ This is a web crawler made in Python for the following problem statement:
    ```bash
    pip install -r requirements.txt
    ```
-   > Note: I suggest doing creating a new python environment before this step. 
+   > Note: I suggest creating a new python environment before this step. 
 
 ---
 
@@ -47,7 +45,7 @@ This is a web crawler made in Python for the following problem statement:
 
 3. Run the crawler:
    ```bash
-   python3 __main__.py
+   python3 main.py
    ```
 
 4. Stop the crawler after some time:
