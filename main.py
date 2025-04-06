@@ -2,7 +2,7 @@ from project.core.crawler import Crawler
 from project.database.domain_mapper import DomainMapper
 import asyncio
 
-if __name__ == "__main__":
+def main():
     try:
         DomainMapper().save_domain()
         asyncio.run(Crawler().run_crawler())
@@ -12,3 +12,7 @@ if __name__ == "__main__":
         Crawler().shutdown()
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
+
+if __name__ == "__main__":
+    main()
