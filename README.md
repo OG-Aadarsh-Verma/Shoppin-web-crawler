@@ -21,7 +21,7 @@ This is a web crawler made in Python for the following problem statement:
 
 2. Install the dependencies:
    ```bash
-   pip install -r requirements.txt
+   python3 -m pip install -r requirements.txt
    ```
    > Note: I suggest creating a new python environment before this step. 
 
