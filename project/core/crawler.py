@@ -55,7 +55,7 @@ class Crawler:
         """
         crawl_delay = rp.crawl_delay("*") or 0
         while True:
-            if self.shutdown_signal(): # To terminate the worker
+            if self.check_shutdown_signal(): # To terminate the worker
                 logger.info("[CRAWL] Shutdown signal received. Stopping worker.")
                 while not queue.empty():
                     queue.task_done()
@@ -156,7 +156,7 @@ class Crawler:
         self.db.close()
         logger.info("[CRAWL] Crawler shutdown complete.")
 
-    def shutdown_signal(self):
+    def check_shutdown_signal(self):
         """
             Checks if a shutdown.signal (file) has been received.
         """
