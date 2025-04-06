@@ -84,7 +84,6 @@ class Crawler:
     async def crawl_domain(self, domain, num_workers=5):
         """
             Crawls a given domain asynchronously while following 'robots.txt'.
-            Save a list of product URLs found on the domain.
         """
         logger.info(msg=f"[CRAWL] Starting to crawl domain: {domain}")
         queue = asyncio.Queue()
@@ -118,7 +117,6 @@ class Crawler:
     async def run_crawler(self):
         """
             Function that executes the web crawler.
-            Reads the domains to crawl from 'domains.txt' file.
         """
         domains = []
         for domain in self.domain_collection.find():
