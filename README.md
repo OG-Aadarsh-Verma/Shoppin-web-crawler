@@ -51,6 +51,7 @@ This is a web crawler made in Python for the following problem statement:
 4. Stop the crawler after some time:
    >Note: Run this command in a new terminal.
    ```bash
+   cd Shoppin-web-crawler
    python3 project/core/shutdown.py
    ```
 
