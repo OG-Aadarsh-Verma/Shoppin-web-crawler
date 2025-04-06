@@ -58,3 +58,5 @@ This is a web crawler made in Python for the following problem statement:
    ```bash
    python3 db_to_file_mapper.py
    ```
+
+> **Note**: All the logs of for the crawler can be found at `project/logs/crawler.log` 
