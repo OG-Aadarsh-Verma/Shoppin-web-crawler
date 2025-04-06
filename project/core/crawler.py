@@ -2,100 +2,23 @@ import asyncio
 import aiohttp
 import os
 from urllib.parse import urlparse
-from dotenv import load_dotenv
 
+from .cache_manager import CacheManager
 from ..logs.logger_config import logger
 from .scrapper import Scrapper 
-
 from ..database.db import Database
 
-load_dotenv()
-
 class Crawler:
-    VISITED_LIMIT = os.getenv('VISITED_LIMIT', 100)
-    PRODUCT_LIMIT = os.getenv('PRODUCT_LIMIT', 1000)
 
     def __init__(self):
         self.db = Database()
-        self.domain_collection = self.db.get_domain_collection()
+        self.cache_manager = CacheManager(self.db)
         self.scrapper = Scrapper()
+        self.domain_collection = self.db.get_domain_collection()
+        self.domain_count = self.domain_collection.count_documents({})
+        self.crawled_domains = set()
         self.running_tasks = []
-        self.visited_set = set()
-        self.product_set = set()
 
-    def is_visited(self, url):
-        """
-            Checks if the URL has been visited recently.
-            Returns True if visited, False otherwise.
-        """
-        if url in self.visited_set:
-            return True
-
-        if len(self.visited_set) >= self.VISITED_LIMIT:
-            self.flush_visited_urls()
-
-        self.visited_set.add(url)
-        return False
-
-
-    def is_saved(self, url):
-        """
-            Checks if the URL is already saved in the product cache.
-            Returns True if saved, False otherwise.
-        """
-        if url in self.product_set:
-            return True
-
-        return False
-
-
-    def save_product_url(self, domain, url):
-        """
-            Saves the product URLs to cache. Flushes to DB when limit is reached.
-        """
-        self.product_set.add((domain, url))
-        if len(self.product_set) >= self.PRODUCT_LIMIT:
-            self.flush_product_urls()
-
-
-    def flush_visited_urls(self):
-        """
-            Flushes the cached visited URLs to the database.
-        """
-        try:
-            self.db.insert_many_unique(
-                collection=self.db.get_visited_collection(),
-                documents=[
-                    {'url':url}
-                    for url in self.visited_set
-                ]
-            )
-            self.visited_set.clear()
-            logger.info("Visited URLs flushed to the database.")
-        except Exception as e:
-            logger.error(f"[CRAWL] Error flushing visited URLs: {e}", exc_info=True)
-            return
-        
-        
-    def flush_product_urls(self):
-        """
-            Flushes the cached product URLs to the database.
-        """
-        try: 
-            self.db.insert_many_unique(
-                collection=self.db.get_product_collection(),
-                documents=[
-                    {'domain': domain, 'url': url} 
-                    for (domain, url) in self.product_set
-                ],
-            )
-
-            self.product_set.clear()
-            logger.info("Product URLs flushed to the database.")
-        except Exception as e:
-            logger.error(f"[CRAWL] Error flushing product URLs: {e}", exc_info=True)
-            return
-        
 
     async def process_url(self, url, session, queue, domain, rp):
         """
@@ -114,31 +37,23 @@ class Crawler:
         for link in all_links_on_page:
             if link in queue._queue:
                 continue
-            if self.is_saved(link):
+            if self.cache_manager.is_saved(link):
                 continue
             
             if self.scrapper.is_valid_product_url(link, domain):
-                self.save_product_url(url=link, domain=domain)
+                self.cache_manager.save_product_url(url=link, domain=domain)
                 await queue.put(link)
             elif self.scrapper.is_category(link, domain):
                 await queue.put(link)
             elif urlparse(domain).netloc == urlparse(link).netloc:
-                await queue.put(link)
-    
-    def progress_status(self):
-        """
-            Periodically prints the progress of the crawler.
-        """
-        vis_len = len(self.visited_set)
-        prod_len = len(self.product_set)
-        logger.info(f"[CACHE] Visited URLs: {vis_len}, Product URLs: {prod_len}")
+                await queue.put(link)    
 
 
     async def worker(self, queue, session, domain, rp):
         """
             Woker function to process URLs from the queue.
         """
-        crawl_delay = rp.crawl_delay("*") or 0.5
+        crawl_delay = rp.crawl_delay("*") or 0
         while True:
             if self.shutdown_signal(): # To terminate the worker
                 logger.info("[CRAWL] Shutdown signal received. Stopping worker.")
@@ -156,7 +71,7 @@ class Crawler:
                 queue.task_done()
                 break
 
-            if not self.is_visited(url):
+            if not self.cache_manager.is_visited(url):
                 try:
                     await self.process_url(url=url, session=session, queue=queue,domain= domain, rp=rp)
                 except Exception as e:
@@ -164,7 +79,7 @@ class Crawler:
             
             queue.task_done()        
             await asyncio.sleep(crawl_delay)
-            self.progress_status()
+            self.cache_manager.cache_status()
 
     async def crawl_domain(self, domain, num_workers=5):
         """
@@ -213,7 +128,10 @@ class Crawler:
             logger.error("[DB] No domains were found in the database.")
             return
         logger.info(msg="[CRAWL] Web crawler started.")  
-        self.running_tasks = [self.crawl_domain(domain) for domain in domains]
+        self.running_tasks = [
+            asyncio.create_task(self.crawl_domain(domain))
+            for domain in domains
+        ]
         await asyncio.gather(*self.running_tasks)  
         self.shutdown()
         logger.info(msg="[CRAWL] Web crawler terminated.")

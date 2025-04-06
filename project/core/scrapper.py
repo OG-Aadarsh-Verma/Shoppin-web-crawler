@@ -33,9 +33,11 @@ class Scrapper:
         except aiohttp.ClientError as e:
             logger.error(f"[SCRAP] Error fetching {url}: {e}")
             return None
-        except TimeoutError as e:
+        except TimeoutError:
             logger.error(f"[SCRAP] Timeout while fetching {url}")
             return None
+        except UnicodeDecodeError as ude:
+            logger.error(f"[SCRAP] Possibily redundant link. Decode error on {url}.")
         except Exception as e:
             logger.error(f"[SCRAP] Unexpected error while fetching {url}: {e}", exc_info=True)
             return None
